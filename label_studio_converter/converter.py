@@ -6,6 +6,7 @@ import ujson as json
 import ijson
 import xml.dom
 import xml.dom.minidom
+import random
 
 from shutil import copy2
 from enum import Enum
@@ -54,6 +55,7 @@ class Format(Enum):
     ASR_MANIFEST = 10
     YOLO = 11
     CSV_OLD = 12
+    RESNET18_RACE = 13
 
     def __str__(self):
         return self.name
@@ -137,6 +139,11 @@ class Converter(object):
             'link': 'https://labelstud.io/guide/export.html#ASR-MANIFEST',
             'tags': ['speech recognition'],
         },
+        Format.RESNET18_RACE: {
+            'title': 'Resnet18 Race',
+            'description': 'Resnet18 model specifically designed for track detection. Output x and y',
+            'tags': ['keypoint detection'],
+        },        
     }
 
     def all_formats(self):
@@ -254,6 +261,16 @@ class Converter(object):
                 project_dir=self.project_dir,
                 upload_dir=self.upload_dir,
                 download_resources=self.download_resources,
+            )
+        elif format == Format.RESNET18_RACE:
+            image_dir = kwargs.get('image_dir')
+            label_dir = kwargs.get('label_dir')
+            self.convert_to_resnet18_race(
+                input_data,
+                output_data,
+                output_image_dir=image_dir,
+                output_label_dir=label_dir,
+                is_dir=is_dir,
             )
 
     def _get_data_keys_and_output_tags(self, output_tags=None):
@@ -462,7 +479,6 @@ class Converter(object):
         output_file = os.path.join(output_dir, 'result.json')
         records = []
         item_iterator = self.iter_from_dir if is_dir else self.iter_from_json_file
-
         for item in item_iterator(input_data):
             record = deepcopy(item['input'])
             if item.get('id') is not None:
@@ -477,7 +493,6 @@ class Converter(object):
             if 'agreement' in item:
                 record['agreement'] = item['agreement']
             records.append(record)
-
         with io.open(output_file, mode='w', encoding='utf8') as fout:
             json.dump(records, fout, indent=2, ensure_ascii=False)
 
@@ -868,6 +883,80 @@ class Converter(object):
                 fout,
                 indent=2,
             )
+
+    def convert_to_resnet18_race(
+        self,
+        input_data,
+        output_dir,
+        output_image_dir=None,
+        output_label_dir=None,
+        is_dir=True,
+        split_labelers=False,        
+    ):
+        self._check_format(Format.RESNET18_RACE)
+        ensure_dir(output_dir)
+        output_train_dir = os.path.join(output_dir, 'train')
+        output_test_dir = os.path.join(output_dir, 'test')
+        output_val_dir = os.path.join(output_dir, 'val')
+        output_train_image_dir = os.path.join(output_train_dir, 'image')
+        output_train_label_dir = os.path.join(output_train_dir, 'label')
+        output_test_image_dir = os.path.join(output_test_dir, 'image')
+        output_test_label_dir = os.path.join(output_test_dir, 'label')
+        output_val_image_dir = os.path.join(output_val_dir, 'image')
+        output_val_label_dir = os.path.join(output_val_dir, 'label')
+        os.makedirs(output_train_image_dir, exist_ok=True)
+        os.makedirs(output_train_label_dir, exist_ok=True)
+        os.makedirs(output_test_image_dir, exist_ok=True)
+        os.makedirs(output_test_label_dir, exist_ok=True)
+        os.makedirs(output_val_image_dir, exist_ok=True)
+        os.makedirs(output_val_label_dir, exist_ok=True)
+        train_scale = 0.7
+        test_scale = 0.2
+        val_scale = 0.1
+        item_iterator = (
+            self.iter_from_dir(input_data)
+            if is_dir
+            else self.iter_from_json_file(input_data)
+        )
+        data_key = self._data_keys[0]
+        for item_idx, item in enumerate(item_iterator):
+            image_path = item['input'][data_key]
+            print(item)
+            image_file_name = os.path.splitext(os.path.basename(image_path))[0]
+            random_number = random.random()
+            if random_number < 0.7:
+                output_image_dir = output_train_image_dir
+                output_label_dir = output_train_label_dir
+            elif random_number < 0.9:
+                output_image_dir = output_test_image_dir
+                output_label_dir = output_test_label_dir
+            else:
+                output_image_dir = output_val_image_dir
+                output_label_dir = output_val_label_dir
+            # get image path and label file path
+            output_label_path = os.path.join(output_label_dir, image_file_name + '.txt')
+            #download image
+            if not os.path.exists(image_path):
+                try:
+                    image_path = download(
+                        image_path,
+                        output_image_dir,
+                        project_dir=self.project_dir,
+                        return_relative_path=True,
+                        upload_dir=self.upload_dir,
+                        download_resources=self.download_resources,
+                    )
+                except:
+                    logger.info(
+                        'Unable to download {image_path}. The item {item} will be skipped'.format(
+                            image_path=image_path, item=item
+                        ),
+                        exc_info=True,
+                    )
+            with open(output_label_path, 'w') as file:
+                # 写入内容到文件
+                file.write(str(round(item['output']['kp-1'][0]['x'] / 100 * item['output']['kp-1'][0]['original_width'])) + ' ' + str(round(item['output']['kp-1'][0]['y'] / 100 * item['output']['kp-1'][0]['original_height'])))
+
 
     @staticmethod
     def rotated_rectangle(label):
