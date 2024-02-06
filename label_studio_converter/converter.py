@@ -7,6 +7,7 @@ import ijson
 import xml.dom
 import xml.dom.minidom
 import random
+import yaml
 
 from shutil import copy2
 from enum import Enum
@@ -984,13 +985,13 @@ class Converter(object):
         ensure_dir(output_dir)
         output_train_dir = os.path.join(output_dir, 'train')
         output_test_dir = os.path.join(output_dir, 'test')
-        output_val_dir = os.path.join(output_dir, 'val')
-        output_train_image_dir = os.path.join(output_train_dir, 'image')
-        output_train_label_dir = os.path.join(output_train_dir, 'label')
-        output_test_image_dir = os.path.join(output_test_dir, 'image')
-        output_test_label_dir = os.path.join(output_test_dir, 'label')
-        output_val_image_dir = os.path.join(output_val_dir, 'image')
-        output_val_label_dir = os.path.join(output_val_dir, 'label')
+        output_val_dir = os.path.join(output_dir, 'valid')
+        output_train_image_dir = os.path.join(output_train_dir, 'images')
+        output_train_label_dir = os.path.join(output_train_dir, 'labels')
+        output_test_image_dir = os.path.join(output_test_dir, 'images')
+        output_test_label_dir = os.path.join(output_test_dir, 'labels')
+        output_val_image_dir = os.path.join(output_val_dir, 'images')
+        output_val_label_dir = os.path.join(output_val_dir, 'labels')
         os.makedirs(output_train_image_dir, exist_ok=True)
         os.makedirs(output_train_label_dir, exist_ok=True)
         os.makedirs(output_test_image_dir, exist_ok=True)
@@ -1008,6 +1009,19 @@ class Converter(object):
         data_key = self._data_keys[0]
         categories, category_name_to_id = self._get_labels()
 
+        output_data_yaml = os.path.join(output_dir, 'data.yaml')
+        names_array = []
+        for name in category_name_to_id:
+            names_array.append(name)
+        data = {
+            'train': './train/images',
+            'val': './valid/images',
+            'test': './test/images',
+            'nc': len(category_name_to_id),
+            'names':names_array
+        }
+        with open(output_data_yaml, 'w') as file:
+            yaml.dump(data, file)
         for item_idx, item in enumerate(item_iterator):
             image_path = item['input'][data_key]
             image_file_name = os.path.splitext(os.path.basename(image_path))[0]
