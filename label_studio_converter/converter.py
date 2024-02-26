@@ -1026,10 +1026,10 @@ class Converter(object):
             image_path = item['input'][data_key]
             image_file_name = os.path.splitext(os.path.basename(image_path))[0]
             random_number = random.random()
-            if random_number < 0.7:
+            if random_number < train_scale:
                 output_image_dir = output_train_image_dir
                 output_label_dir = output_train_label_dir
-            elif random_number < 0.9:
+            elif random_number < train_scale + test_scale:
                 output_image_dir = output_test_image_dir
                 output_label_dir = output_test_label_dir
             else:
